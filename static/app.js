@@ -250,6 +250,8 @@
     const labels = { idle: "Ready", speaking: "Speaking…", thinking: "Thinking…" };
     if (dot) { dot.className = "dot " + state; }
     if (txt) { txt.textContent = text || labels[state] || state; }
+    // Drive GLTF model animation
+    if (window._nurseAnimate) window._nurseAnimate(state);
   }
 
   function initThreeScene() {
@@ -291,32 +293,83 @@
 
     /* --- Try loading GLTF model, fall back to procedural --- */
     let modelLoaded = false;
+    let gltfActions = {};   // { idle, speak, think, agree }
+    let activeAction = null;
+
+    function crossFadeTo(newName) {
+      const next = gltfActions[newName] || gltfActions.idle;
+      if (!next || next === activeAction) return;
+      if (activeAction) {
+        activeAction.fadeOut(0.35);
+      }
+      next.reset().fadeIn(0.35).play();
+      activeAction = next;
+    }
+
+    // Expose animation state changes
+    window._nurseAnimate = function (state) {
+      if (!modelLoaded) return;
+      if (state === 'speaking') crossFadeTo('speak');
+      else if (state === 'thinking') crossFadeTo('think');
+      else crossFadeTo('idle');
+    };
+
     if (typeof THREE.GLTFLoader !== 'undefined') {
       const loader = new THREE.GLTFLoader();
-      // Try loading a custom model from /static/nurse.glb
       loader.load(
         '/static/nurse.glb',
         (gltf) => {
           const model = gltf.scene;
-          model.scale.set(1, 1, 1);
-          // Center model
+
+          // Tint the model to look more like nurse scrubs (teal tone)
+          model.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((mat) => {
+                // Boost emissive slightly for visibility on dark bg
+                if (mat.emissive) mat.emissive.set(0x0a1a2a);
+                mat.needsUpdate = true;
+              });
+            }
+          });
+
+          // Center & position model
           const box = new THREE.Box3().setFromObject(model);
           const center = box.getCenter(new THREE.Vector3());
           const height = box.max.y - box.min.y;
           model.position.set(-center.x, -box.min.y - 0.8, -center.z);
-          // Adjust camera for model height
-          camera.position.set(0, height * 0.5, height * 1.8);
+          camera.position.set(0, height * 0.45, height * 1.6);
           camera.lookAt(0, height * 0.4, 0);
           scene.add(model);
           modelLoaded = true;
-          // Set up animations if available
+
+          // Map animations by name
           if (gltf.animations && gltf.animations.length) {
             mixer = new THREE.AnimationMixer(model);
-            const idle = gltf.animations.find(a => /idle|breathing|stand/i.test(a.name));
-            if (idle) mixer.clipAction(idle).play();
-            else mixer.clipAction(gltf.animations[0]).play();
+            const clips = {};
+            gltf.animations.forEach(a => { clips[a.name.toLowerCase()] = a; });
+            console.log('[3d] Available animations:', Object.keys(clips).join(', '));
+
+            // Map to our states
+            gltfActions.idle = mixer.clipAction(
+              clips.idle || clips.breathing || clips.stand || gltf.animations[0]
+            );
+            gltfActions.speak = mixer.clipAction(
+              clips.talking || clips.talk || clips.agree || clips.walk || gltf.animations[Math.min(1, gltf.animations.length - 1)]
+            );
+            gltfActions.think = mixer.clipAction(
+              clips.thinking || clips.sad_pose || clips.headshake || gltfActions.idle.getClip()
+            );
+            gltfActions.agree = mixer.clipAction(
+              clips.agree || clips.idle || gltf.animations[0]
+            );
+
+            // Start idle
+            gltfActions.idle.play();
+            activeAction = gltfActions.idle;
           }
-          console.log('[3d] GLTF model loaded successfully');
+
+          console.log('[3d] GLTF nurse model loaded (' + (height).toFixed(1) + ' units tall)');
         },
         undefined,
         () => {
