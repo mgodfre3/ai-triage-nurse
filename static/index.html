@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Triage Nurse — Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header id="app-header">
+    <span class="header-icon">⚠️</span>
+    <span class="header-title">AI TRIAGE NURSE</span>
+    <span class="header-divider">—</span>
+    <span class="header-disclaimer">SIMULATION ONLY (NOT MEDICAL ADVICE)</span>
+    <button id="btn-reset" title="Reset Session">🔄 Reset</button>
+  </header>
+
+  <!-- Main 3-column layout -->
+  <main id="app-main">
+
+    <!-- Left: 3D Nurse Avatar -->
+    <section id="nurse-panel">
+      <div id="nurse-canvas-container"></div>
+    </section>
+
+    <!-- Center: Chat Panel -->
+    <section id="chat-panel">
+      <div id="chat-messages"></div>
+      <form id="chat-input-bar" autocomplete="off">
+        <button type="button" id="btn-mic" title="Voice input">🎤</button>
+        <input type="text" id="chat-input" placeholder="Describe your symptoms…" />
+        <button type="submit" id="btn-send" title="Send">➤</button>
+      </form>
+    </section>
+
+    <!-- Right: Intake Form -->
+    <section id="form-panel">
+
+      <!-- Patient Information -->
+      <div class="form-card">
+        <h3 class="form-card-title">👤 Patient Information</h3>
+        <div class="form-field" data-field="patient_name">
+          <span class="field-label">Name</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="age">
+          <span class="field-label">Age</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="sex">
+          <span class="field-label">Sex</span>
+          <span class="field-value">—</span>
+        </div>
+      </div>
+
+      <!-- Symptoms -->
+      <div class="form-card">
+        <h3 class="form-card-title">🩺 Symptoms</h3>
+        <div class="form-field" data-field="chief_complaint">
+          <span class="field-label">Chief Complaint</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="symptom_details">
+          <span class="field-label">Details</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="symptom_duration">
+          <span class="field-label">Duration</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="pain_level">
+          <span class="field-label">Pain Level</span>
+          <span class="field-value">—</span>
+        </div>
+      </div>
+
+      <!-- Vitals -->
+      <div class="form-card">
+        <h3 class="form-card-title">❤️ Vitals</h3>
+        <div class="form-field" data-field="vitals.temperature_f">
+          <span class="field-label">Temperature (°F)</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="vitals.blood_pressure">
+          <span class="field-label">Blood Pressure</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="vitals.heart_rate">
+          <span class="field-label">Heart Rate</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="vitals.o2_saturation">
+          <span class="field-label">O₂ Saturation</span>
+          <span class="field-value">—</span>
+        </div>
+      </div>
+
+      <!-- Medical History -->
+      <div class="form-card">
+        <h3 class="form-card-title">📋 Medical History</h3>
+        <div class="form-field" data-field="medical_history">
+          <span class="field-label">History</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="allergies">
+          <span class="field-label">Allergies</span>
+          <span class="field-value">—</span>
+        </div>
+        <div class="form-field" data-field="current_medications">
+          <span class="field-label">Current Medications</span>
+          <span class="field-value">—</span>
+        </div>
+      </div>
+
+      <!-- Triage Assessment -->
+      <div class="form-card">
+        <h3 class="form-card-title">🚨 Triage Assessment</h3>
+        <div id="triage-badge" class="triage-badge">
+          <span id="triage-level">Pending</span>
+        </div>
+        <p id="triage-reasoning" class="triage-reasoning">Awaiting assessment…</p>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

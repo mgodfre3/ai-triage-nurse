@@ -1,0 +1,19 @@
+# =============================================================================
+# AI Triage Nurse — PersistentVolumeClaim for model caching
+# Prevents re-downloading Foundry Local models on every pod restart.
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache-pvc
+  namespace: ai-triage-nurse
+  labels:
+    app: ai-triage-nurse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # Use "managed-premium" for Azure managed disks, or "default" for cluster default
+  storageClassName: managed-premium
+  resources:
+    requests:
+      storage: 20Gi

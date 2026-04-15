@@ -1,0 +1,22 @@
+# =============================================================================
+# Flux Kustomization — tells Flux how to reconcile the k8s/ manifests
+# =============================================================================
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-triage-nurse
+  namespace: flux-system
+spec:
+  interval: 5m
+  path: ./k8s
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-triage-nurse
+  targetNamespace: ai-triage-nurse
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: ai-triage-nurse
+      namespace: ai-triage-nurse
+  timeout: 10m

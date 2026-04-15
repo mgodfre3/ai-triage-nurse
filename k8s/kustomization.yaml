@@ -1,0 +1,12 @@
+# =============================================================================
+# Kustomize overlay — aggregates all k8s manifests for the ai-triage-nurse app
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai-triage-nurse
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - model-cache-pvc.yaml

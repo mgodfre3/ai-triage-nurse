@@ -1,0 +1,22 @@
+# =============================================================================
+# AI Triage Nurse — Kubernetes Service
+# Exposes the app via an Azure Load Balancer for external access.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-triage-nurse
+  namespace: ai-triage-nurse
+  labels:
+    app: ai-triage-nurse
+  annotations:
+    # TODO: Replace with your Azure resource group containing the AKS cluster
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: "YOUR_RESOURCE_GROUP"
+spec:
+  type: LoadBalancer
+  selector:
+    app: ai-triage-nurse
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

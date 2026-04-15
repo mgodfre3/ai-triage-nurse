@@ -1,0 +1,98 @@
+# =============================================================================
+# AI Triage Nurse — Kubernetes Deployment
+# Targets Arc-enabled AKS cluster "denver-cluster".
+# Foundry Local models require significant RAM; resource requests sized accordingly.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-triage-nurse
+  namespace: ai-triage-nurse
+  labels:
+    app: ai-triage-nurse
+    component: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-triage-nurse
+      component: server
+  template:
+    metadata:
+      labels:
+        app: ai-triage-nurse
+        component: server
+    spec:
+      # --- Pod anti-affinity: prefer spreading replicas across nodes ---
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - ai-triage-nurse
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: ai-triage-nurse
+          # TODO: Replace YOUR_ORG with your GitHub org or username
+          image: ghcr.io/YOUR_ORG/ai-triage-nurse:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+
+          env:
+            - name: FOUNDRY_MODEL_CHAT
+              value: "phi-4-mini"
+            - name: FOUNDRY_MODEL_AUDIO
+              value: "whisper-tiny"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+
+          # --- Startup probe: generous timeout for first-run model downloads ---
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30      # 30 × 10s = up to 5 minutes for model download
+            periodSeconds: 10
+
+          # --- Liveness probe: restart if unhealthy ---
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # --- Readiness probe: don't route traffic until models are loaded ---
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.foundry-local
+
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
