@@ -240,8 +240,7 @@
   /* =====================================================
      5. Three.js — Nurse Avatar (GLTF model + procedural fallback)
      ===================================================== */
-  let mixer = null;   // AnimationMixer for GLTF models
-  let nurseGroup, headGroup, leftArm, rightArm, bodyMesh; // procedural fallback
+  let nurseGroup; // 3D hologram group
 
   // Status indicator helpers
   function setNurseActivity(state, text) {
@@ -270,62 +269,43 @@
     }
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a1628);
+    scene.background = new THREE.Color(0x050e18);
 
     const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
-    camera.position.set(0, 1.2, 4);
-    camera.lookAt(0, 1, 0);
+    camera.position.set(0, 0.8, 3.0);
+    camera.lookAt(0, 0.6, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
-    /* --- Lights (soft studio lighting for character) --- */
-    scene.add(new THREE.AmbientLight(0xe8e0d8, 0.7));
-    const key = new THREE.DirectionalLight(0xfff4e8, 0.9);
+    /* --- Lights (cool tones for holographic look) --- */
+    scene.add(new THREE.AmbientLight(0x1a2a3a, 0.4));
+    const key = new THREE.DirectionalLight(0x88ccff, 0.8);
     key.position.set(2, 3, 4);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0xd0e8f0, 0.5);
+    const fill = new THREE.DirectionalLight(0x0ea5e9, 0.4);
     fill.position.set(-3, 2, 2);
     scene.add(fill);
-    const rim = new THREE.DirectionalLight(0x88bbdd, 0.25);
+    const rim = new THREE.DirectionalLight(0x22d3ee, 0.3);
     rim.position.set(0, 2, -3);
     scene.add(rim);
+    // Point light inside the hologram for glow
+    const coreLight = new THREE.PointLight(0x38bdf8, 0.8, 3);
+    coreLight.position.set(0, 0.8, 0);
+    scene.add(coreLight);
 
     // Subtle floor grid for depth
-    const gridHelper = new THREE.GridHelper(6, 20, 0x1a3040, 0x0f2030);
-    gridHelper.position.y = -0.8;
+    const gridHelper = new THREE.GridHelper(6, 20, 0x0a2030, 0x071520);
+    gridHelper.position.y = -0.1;
     scene.add(gridHelper);
 
-    /* --- Try loading GLTF model, fall back to procedural --- */
-    let modelLoaded = false;
-    let gltfActions = {};   // { idle, speak, think, agree }
-    let activeAction = null;
-
-    function crossFadeTo(newName) {
-      const next = gltfActions[newName] || gltfActions.idle;
-      if (!next || next === activeAction) return;
-      if (activeAction) {
-        activeAction.fadeOut(0.35);
-      }
-      next.reset().fadeIn(0.35).play();
-      activeAction = next;
-    }
-
-    // Expose animation state changes
-    window._nurseAnimate = function (state) {
-      if (!modelLoaded) return;
-      if (state === 'speaking') crossFadeTo('speak');
-      else if (state === 'thinking') crossFadeTo('think');
-      else crossFadeTo('idle');
-    };
-
-    // Use stylized procedural nurse — intentionally designed, avoids uncanny valley
+    // Build medical AI hologram
     buildProceduralNurse(scene);
-    console.log('[3d] Stylized nurse character built');
+    console.log('[3d] Medical AI hologram built');
 
     /* --- Animation loop --- */
     const clock = new THREE.Clock();
@@ -356,330 +336,268 @@
     ro.observe(container);
   }
 
-  /* --- Improved procedural nurse (fallback) --- */
+  /* --- Medical AI Hologram --- */
   function buildProceduralNurse(scene) {
     nurseGroup = new THREE.Group();
     scene.add(nurseGroup);
 
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xdeb896, roughness: 0.7, metalness: 0.0
+    // === Materials ===
+    const glowMat = new THREE.MeshStandardMaterial({
+      color: 0x0ea5e9, emissive: 0x0ea5e9, emissiveIntensity: 0.4,
+      roughness: 0.2, metalness: 0.8, transparent: true, opacity: 0.92
     });
-    const scrubsMat = new THREE.MeshStandardMaterial({
-      color: 0x0d9488, roughness: 0.6, metalness: 0.05
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, emissive: 0x38bdf8, emissiveIntensity: 0.6,
+      roughness: 0.1, metalness: 0.9
     });
     const darkMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b, roughness: 0.8
+      color: 0x0c4a6e, roughness: 0.5, metalness: 0.6
     });
-    const hairMat = new THREE.MeshStandardMaterial({
-      color: 0x2c1810, roughness: 0.9
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0x22d3ee, emissive: 0x22d3ee, emissiveIntensity: 0.3,
+      roughness: 0.15, metalness: 0.7, transparent: true, opacity: 0.7
     });
-    const whiteMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, roughness: 0.4
+    const crossMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5,
+      roughness: 0.1, metalness: 0.3
+    });
+    const hologramMat = new THREE.MeshStandardMaterial({
+      color: 0x0ea5e9, emissive: 0x0ea5e9, emissiveIntensity: 0.2,
+      roughness: 0.3, metalness: 0.5, transparent: true, opacity: 0.15, side: THREE.DoubleSide
     });
 
-    // ── Body (more shaped torso) ──
-    const bodyGeo = new THREE.CylinderGeometry(0.30, 0.24, 1.1, 24);
-    bodyMesh = new THREE.Mesh(bodyGeo, scrubsMat);
-    bodyMesh.position.y = 0.55;
-    nurseGroup.add(bodyMesh);
+    // === Central sphere (AI core) ===
+    const coreGeo = new THREE.IcosahedronGeometry(0.35, 2);
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.position.y = 0.8;
+    nurseGroup.add(core);
+    nurseGroup._core = core;
 
-    // Collar detail
-    const collarGeo = new THREE.TorusGeometry(0.28, 0.03, 8, 24, Math.PI);
-    const collar = new THREE.Mesh(collarGeo, new THREE.MeshStandardMaterial({ color: 0x0b7d72 }));
-    collar.position.set(0, 1.05, 0.05);
-    collar.rotation.x = -0.3;
-    nurseGroup.add(collar);
+    // Inner pulsing sphere
+    const innerGeo = new THREE.SphereGeometry(0.22, 24, 20);
+    const innerMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8, emissive: 0x0ea5e9, emissiveIntensity: 0.8,
+      roughness: 0.0, metalness: 1.0, transparent: true, opacity: 0.6
+    });
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    inner.position.y = 0.8;
+    nurseGroup.add(inner);
+    nurseGroup._inner = inner;
 
-    // V-neck detail
-    const vneckShape = new THREE.Shape();
-    vneckShape.moveTo(-0.08, 0);
-    vneckShape.lineTo(0, -0.12);
-    vneckShape.lineTo(0.08, 0);
-    const vneckGeo = new THREE.ShapeGeometry(vneckShape);
-    const vneck = new THREE.Mesh(vneckGeo, skinMat);
-    vneck.position.set(0, 1.0, 0.305);
-    nurseGroup.add(vneck);
+    // === Medical cross on front of core ===
+    const crossV = new THREE.BoxGeometry(0.06, 0.22, 0.02);
+    const crossH = new THREE.BoxGeometry(0.22, 0.06, 0.02);
+    const cv = new THREE.Mesh(crossV, crossMat);
+    cv.position.set(0, 0.8, 0.34);
+    nurseGroup.add(cv);
+    const ch = new THREE.Mesh(crossH, crossMat);
+    ch.position.set(0, 0.8, 0.34);
+    nurseGroup.add(ch);
 
-    // ── Name badge ──
-    const badgeGeo = new THREE.BoxGeometry(0.16, 0.09, 0.015);
-    const badgeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
-    const badge = new THREE.Mesh(badgeGeo, badgeMat);
-    badge.position.set(0.14, 0.88, 0.30);
-    nurseGroup.add(badge);
-    // Badge accent stripe
-    const stripeGeo = new THREE.BoxGeometry(0.16, 0.02, 0.016);
-    const stripe = new THREE.Mesh(stripeGeo, new THREE.MeshStandardMaterial({ color: 0x0d9488 }));
-    stripe.position.set(0.14, 0.91, 0.301);
-    nurseGroup.add(stripe);
+    // === Orbiting rings ===
+    const ring1Geo = new THREE.TorusGeometry(0.55, 0.015, 8, 64);
+    const ring1 = new THREE.Mesh(ring1Geo, ringMat);
+    ring1.position.y = 0.8;
+    ring1.rotation.x = Math.PI / 2.5;
+    nurseGroup.add(ring1);
+    nurseGroup._ring1 = ring1;
 
-    // ── Stethoscope ──
-    const stethTube = new THREE.TorusGeometry(0.22, 0.018, 8, 32);
-    const stethMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.7, roughness: 0.2 });
-    const steth = new THREE.Mesh(stethTube, stethMat);
-    steth.position.set(0, 1.08, 0.06);
-    steth.rotation.x = Math.PI / 2.3;
-    nurseGroup.add(steth);
-    // Earpieces
-    const earGeo = new THREE.SphereGeometry(0.025, 8, 8);
-    const earL = new THREE.Mesh(earGeo, stethMat);
-    earL.position.set(-0.16, 1.2, -0.08);
-    nurseGroup.add(earL);
-    const earR = new THREE.Mesh(earGeo, stethMat);
-    earR.position.set(0.16, 1.2, -0.08);
-    nurseGroup.add(earR);
-    // Chest piece
-    const chestGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.015, 16);
-    const chest = new THREE.Mesh(chestGeo, stethMat);
-    chest.position.set(0.08, 0.6, 0.27);
-    chest.rotation.x = Math.PI / 2;
-    nurseGroup.add(chest);
+    const ring2Geo = new THREE.TorusGeometry(0.65, 0.012, 8, 64);
+    const ring2 = new THREE.Mesh(ring2Geo, ringMat);
+    ring2.position.y = 0.8;
+    ring2.rotation.x = Math.PI / 1.8;
+    ring2.rotation.y = Math.PI / 3;
+    nurseGroup.add(ring2);
+    nurseGroup._ring2 = ring2;
 
-    // ── Head ──
-    headGroup = new THREE.Group();
-    headGroup.position.y = 1.50;
-    nurseGroup.add(headGroup);
+    const ring3Geo = new THREE.TorusGeometry(0.75, 0.008, 8, 64);
+    const ring3 = new THREE.Mesh(ring3Geo, ringMat);
+    ring3.position.y = 0.8;
+    ring3.rotation.x = Math.PI / 3.5;
+    ring3.rotation.z = Math.PI / 4;
+    nurseGroup.add(ring3);
+    nurseGroup._ring3 = ring3;
 
-    // Head (slightly oval)
-    const headGeo = new THREE.SphereGeometry(0.25, 24, 20);
-    const head = new THREE.Mesh(headGeo, skinMat);
-    head.scale.set(0.92, 1.0, 0.88);
-    headGroup.add(head);
+    // === Orbiting health icons (small spheres on ring paths) ===
+    const iconGeo = new THREE.OctahedronGeometry(0.05, 0);
+    const iconMat1 = new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xf43f5e, emissiveIntensity: 0.5 }); // red - heart
+    const iconMat2 = new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 0.5 }); // green - vitals
+    const iconMat3 = new THREE.MeshStandardMaterial({ color: 0xeab308, emissive: 0xeab308, emissiveIntensity: 0.5 }); // yellow - alert
 
-    // Neck
-    const neckGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.15, 12);
-    const neck = new THREE.Mesh(neckGeo, skinMat);
-    neck.position.y = -0.30;
-    headGroup.add(neck);
+    const icon1 = new THREE.Mesh(iconGeo, iconMat1);
+    nurseGroup.add(icon1);
+    nurseGroup._icon1 = icon1;
+    const icon2 = new THREE.Mesh(iconGeo, iconMat2);
+    nurseGroup.add(icon2);
+    nurseGroup._icon2 = icon2;
+    const icon3 = new THREE.Mesh(iconGeo, iconMat3);
+    nurseGroup.add(icon3);
+    nurseGroup._icon3 = icon3;
 
-    // ── Hair (layered for volume) ──
-    const hairBack = new THREE.Mesh(
-      new THREE.SphereGeometry(0.27, 20, 16),
-      hairMat
-    );
-    hairBack.position.set(0, 0.04, -0.04);
-    hairBack.scale.set(1.02, 1.04, 0.95);
-    headGroup.add(hairBack);
-    // Side hair
-    const sideHairGeo = new THREE.SphereGeometry(0.12, 12, 10);
-    const sideL = new THREE.Mesh(sideHairGeo, hairMat);
-    sideL.position.set(-0.22, -0.04, 0.02);
-    sideL.scale.set(0.7, 1.2, 0.8);
-    headGroup.add(sideL);
-    const sideR = new THREE.Mesh(sideHairGeo, hairMat);
-    sideR.position.set(0.22, -0.04, 0.02);
-    sideR.scale.set(0.7, 1.2, 0.8);
-    headGroup.add(sideR);
-    // Hair bun
-    const bunGeo = new THREE.SphereGeometry(0.10, 12, 10);
-    const bun = new THREE.Mesh(bunGeo, hairMat);
-    bun.position.set(0, 0.18, -0.22);
-    headGroup.add(bun);
+    // === Holographic shield/dome ===
+    const domeGeo = new THREE.SphereGeometry(0.9, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    const dome = new THREE.Mesh(domeGeo, hologramMat);
+    dome.position.y = 0.0;
+    nurseGroup.add(dome);
+    nurseGroup._dome = dome;
 
-    // ── Face features ──
-    // Eyebrows
-    const browGeo = new THREE.BoxGeometry(0.08, 0.015, 0.015);
-    const browMat = new THREE.MeshStandardMaterial({ color: 0x3b2717 });
-    const browL = new THREE.Mesh(browGeo, browMat);
-    browL.position.set(-0.08, 0.10, 0.22);
-    browL.rotation.z = 0.08;
-    headGroup.add(browL);
-    const browR = new THREE.Mesh(browGeo, browMat);
-    browR.position.set(0.08, 0.10, 0.22);
-    browR.rotation.z = -0.08;
-    headGroup.add(browR);
+    // === Base platform ===
+    const baseGeo = new THREE.CylinderGeometry(0.5, 0.6, 0.06, 32);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x0c4a6e, emissive: 0x0ea5e9, emissiveIntensity: 0.15,
+      roughness: 0.3, metalness: 0.8
+    });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = -0.05;
+    nurseGroup.add(base);
 
-    // Eyes (with iris and highlight)
-    const eyeWhiteGeo = new THREE.SphereGeometry(0.038, 12, 10);
-    const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xf8f8f8, roughness: 0.2 });
-    const eyeWL = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
-    eyeWL.position.set(-0.085, 0.045, 0.21);
-    eyeWL.scale.set(1, 0.85, 0.5);
-    headGroup.add(eyeWL);
-    const eyeWR = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
-    eyeWR.position.set(0.085, 0.045, 0.21);
-    eyeWR.scale.set(1, 0.85, 0.5);
-    headGroup.add(eyeWR);
-    // Irises
-    const irisGeo = new THREE.SphereGeometry(0.022, 10, 8);
-    const irisMat = new THREE.MeshStandardMaterial({ color: 0x3b7dd8, roughness: 0.3 });
-    const irisL = new THREE.Mesh(irisGeo, irisMat);
-    irisL.position.set(-0.085, 0.045, 0.235);
-    headGroup.add(irisL);
-    const irisR = new THREE.Mesh(irisGeo, irisMat);
-    irisR.position.set(0.085, 0.045, 0.235);
-    headGroup.add(irisR);
-    // Pupils
-    const pupilGeo = new THREE.SphereGeometry(0.012, 8, 6);
-    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
-    pupilL.position.set(-0.085, 0.045, 0.245);
-    headGroup.add(pupilL);
-    const pupilR = new THREE.Mesh(pupilGeo, pupilMat);
-    pupilR.position.set(0.085, 0.045, 0.245);
-    headGroup.add(pupilR);
-    // Eye highlights
-    const hlGeo = new THREE.SphereGeometry(0.006, 6, 4);
-    const hlMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const hlL = new THREE.Mesh(hlGeo, hlMat);
-    hlL.position.set(-0.076, 0.054, 0.25);
-    headGroup.add(hlL);
-    const hlR = new THREE.Mesh(hlGeo, hlMat);
-    hlR.position.set(0.076, 0.054, 0.25);
-    headGroup.add(hlR);
+    // Base ring glow
+    const baseRingGeo = new THREE.TorusGeometry(0.55, 0.02, 8, 48);
+    const baseRingMat = new THREE.MeshStandardMaterial({
+      color: 0x22d3ee, emissive: 0x22d3ee, emissiveIntensity: 0.6,
+      transparent: true, opacity: 0.8
+    });
+    const baseRing = new THREE.Mesh(baseRingGeo, baseRingMat);
+    baseRing.position.y = -0.01;
+    baseRing.rotation.x = Math.PI / 2;
+    nurseGroup.add(baseRing);
+    nurseGroup._baseRing = baseRing;
 
-    // Eyelids (for blink animation)
-    const lidGeo = new THREE.SphereGeometry(0.04, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.5);
-    const lidMat = new THREE.MeshStandardMaterial({ color: 0xdeb896, roughness: 0.7 });
-    nurseGroup._lidL = new THREE.Mesh(lidGeo, lidMat);
-    nurseGroup._lidL.position.set(-0.085, 0.055, 0.215);
-    nurseGroup._lidL.scale.set(1, 0.1, 0.5);
-    nurseGroup._lidL.rotation.x = -0.3;
-    headGroup.add(nurseGroup._lidL);
-    nurseGroup._lidR = new THREE.Mesh(lidGeo, lidMat);
-    nurseGroup._lidR.position.set(0.085, 0.055, 0.215);
-    nurseGroup._lidR.scale.set(1, 0.1, 0.5);
-    nurseGroup._lidR.rotation.x = -0.3;
-    headGroup.add(nurseGroup._lidR);
+    // === Floating data particles ===
+    const particleCount = 40;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 0.3 + Math.random() * 0.6;
+      particlePositions[i * 3] = Math.cos(angle) * radius;
+      particlePositions[i * 3 + 1] = Math.random() * 1.6;
+      particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0x38bdf8, size: 0.025, transparent: true, opacity: 0.6
+    });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    nurseGroup.add(particles);
+    nurseGroup._particles = particles;
+    nurseGroup._particlePositions = particlePositions;
 
-    // Nose
-    const noseGeo = new THREE.ConeGeometry(0.025, 0.05, 8);
-    const nose = new THREE.Mesh(noseGeo, skinMat);
-    nose.position.set(0, -0.01, 0.245);
-    nose.rotation.x = -0.35;
-    headGroup.add(nose);
-
-    // Lips / Mouth
-    const lipsGeo = new THREE.TorusGeometry(0.04, 0.012, 8, 16, Math.PI);
-    const lipsMat = new THREE.MeshStandardMaterial({ color: 0xc07070, roughness: 0.5 });
-    nurseGroup._mouth = new THREE.Mesh(lipsGeo, lipsMat);
-    nurseGroup._mouth.position.set(0, -0.07, 0.22);
-    nurseGroup._mouth.rotation.x = Math.PI + 0.2;
-    headGroup.add(nurseGroup._mouth);
-
-    // ── Arms (with hands) ──
-    const armGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.55, 14);
-    leftArm = new THREE.Group();
-    const lArmMesh = new THREE.Mesh(armGeo, scrubsMat);
-    leftArm.add(lArmMesh);
-    // Forearm (skin)
-    const foreGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.25, 10);
-    const foreL = new THREE.Mesh(foreGeo, skinMat);
-    foreL.position.y = -0.40;
-    leftArm.add(foreL);
-    // Hand
-    const handGeo = new THREE.SphereGeometry(0.04, 8, 6);
-    const handL = new THREE.Mesh(handGeo, skinMat);
-    handL.position.y = -0.55;
-    leftArm.add(handL);
-    leftArm.position.set(-0.38, 0.82, 0);
-    leftArm.rotation.z = 0.15;
-    nurseGroup.add(leftArm);
-
-    rightArm = new THREE.Group();
-    const rArmMesh = new THREE.Mesh(armGeo, scrubsMat);
-    rightArm.add(rArmMesh);
-    const foreR = new THREE.Mesh(foreGeo, skinMat);
-    foreR.position.y = -0.40;
-    rightArm.add(foreR);
-    const handR = new THREE.Mesh(handGeo, skinMat);
-    handR.position.y = -0.55;
-    rightArm.add(handR);
-    rightArm.position.set(0.38, 0.82, 0);
-    rightArm.rotation.z = -0.15;
-    nurseGroup.add(rightArm);
-
-    // Clipboard in left hand
-    const clipGeo = new THREE.BoxGeometry(0.16, 0.22, 0.015);
-    const clipMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.6 });
-    const clipboard = new THREE.Mesh(clipGeo, clipMat);
-    clipboard.position.set(-0.42, 0.25, 0.12);
-    clipboard.rotation.set(0.1, 0.3, 0.15);
-    nurseGroup.add(clipboard);
-    // Paper on clipboard
-    const paperGeo = new THREE.BoxGeometry(0.13, 0.18, 0.005);
-    const paper = new THREE.Mesh(paperGeo, whiteMat);
-    paper.position.set(-0.42, 0.26, 0.13);
-    paper.rotation.set(0.1, 0.3, 0.15);
-    nurseGroup.add(paper);
-
-    // ── Legs ──
-    const legGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.7, 12);
-    const leftLeg = new THREE.Mesh(legGeo, darkMat);
-    leftLeg.position.set(-0.12, -0.35, 0);
-    nurseGroup.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeo, darkMat);
-    rightLeg.position.set(0.12, -0.35, 0);
-    nurseGroup.add(rightLeg);
-
-    // Shoes
-    const shoeGeo = new THREE.BoxGeometry(0.1, 0.05, 0.14);
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
-    const shoeL = new THREE.Mesh(shoeGeo, shoeMat);
-    shoeL.position.set(-0.12, -0.73, 0.02);
-    nurseGroup.add(shoeL);
-    const shoeR = new THREE.Mesh(shoeGeo, shoeMat);
-    shoeR.position.set(0.12, -0.73, 0.02);
-    nurseGroup.add(shoeR);
-
-    // Track blink timer
-    nurseGroup._lastBlink = 0;
-    nurseGroup._blinking = false;
+    // Pulse line (EKG style) — a sequence of small spheres forming a ring
+    const pulseDots = [];
+    const pulseGroup = new THREE.Group();
+    pulseGroup.position.y = 0.8;
+    const pulseDotGeo = new THREE.SphereGeometry(0.012, 6, 4);
+    const pulseDotMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+    for (let i = 0; i < 60; i++) {
+      const dot = new THREE.Mesh(pulseDotGeo, pulseDotMat.clone());
+      const angle = (i / 60) * Math.PI * 2;
+      dot.position.set(Math.cos(angle) * 0.45, 0, Math.sin(angle) * 0.45);
+      pulseGroup.add(dot);
+      pulseDots.push(dot);
+    }
+    nurseGroup.add(pulseGroup);
+    nurseGroup._pulseDots = pulseDots;
+    nurseGroup._pulseGroup = pulseGroup;
   }
 
-  /* --- Procedural nurse animation --- */
+  /* --- Medical AI Hologram animation --- */
   function animateProceduralNurse(t) {
-    // Idle breathing
-    const breathe = 1 + Math.sin(t * 1.8) * 0.012;
-    bodyMesh.scale.set(breathe, 1, breathe);
+    const g = nurseGroup;
 
-    // Subtle weight shift
-    nurseGroup.position.x = Math.sin(t * 0.5) * 0.01;
-    nurseGroup.rotation.y = Math.sin(t * 0.3) * 0.02;
-
-    // Head movement
-    headGroup.rotation.z = Math.sin(t * 1.2) * 0.015;
-    headGroup.position.y = 1.50 + Math.sin(t * 1.5) * 0.008;
-
-    // Eye blink (every 3-5 seconds)
-    if (nurseGroup._lidL) {
-      if (!nurseGroup._blinking && t - nurseGroup._lastBlink > 3 + Math.random() * 2) {
-        nurseGroup._blinking = true;
-        nurseGroup._lastBlink = t;
-      }
-      if (nurseGroup._blinking) {
-        const blinkPhase = (t - nurseGroup._lastBlink) * 8;
-        const blinkVal = blinkPhase < 1 ? blinkPhase : (blinkPhase < 2 ? 2 - blinkPhase : 0);
-        nurseGroup._lidL.scale.y = 0.1 + blinkVal * 0.9;
-        nurseGroup._lidR.scale.y = 0.1 + blinkVal * 0.9;
-        if (blinkPhase > 2) {
-          nurseGroup._blinking = false;
-          nurseGroup._lidL.scale.y = 0.1;
-          nurseGroup._lidR.scale.y = 0.1;
-        }
-      }
+    // Core rotation and pulse
+    if (g._core) {
+      g._core.rotation.y = t * 0.3;
+      g._core.rotation.x = Math.sin(t * 0.5) * 0.1;
+      const pulse = 1.0 + Math.sin(t * 2) * 0.05;
+      g._core.scale.set(pulse, pulse, pulse);
     }
 
-    // Speaking animation
-    if (window.nurseIsSpeaking) {
-      headGroup.rotation.x = Math.sin(t * 3.5) * 0.06;
-      rightArm.rotation.z = -0.15 + Math.sin(t * 2.5) * 0.2;
-      rightArm.rotation.x = Math.sin(t * 2) * 0.1;
-      leftArm.rotation.z = 0.15 + Math.sin(t * 2.5 + 1) * 0.08;
-      // Mouth movement
-      if (nurseGroup._mouth) {
-        nurseGroup._mouth.scale.y = 1 + Math.sin(t * 8) * 0.4;
-        nurseGroup._mouth.scale.x = 1 + Math.sin(t * 6) * 0.15;
+    // Inner sphere counter-rotate and breathe
+    if (g._inner) {
+      g._inner.rotation.y = -t * 0.5;
+      const breathe = 1.0 + Math.sin(t * 1.5) * 0.15;
+      g._inner.scale.set(breathe, breathe, breathe);
+      g._inner.material.emissiveIntensity = 0.5 + Math.sin(t * 2) * 0.3;
+    }
+
+    // Ring rotations (each at different speed)
+    if (g._ring1) g._ring1.rotation.z = t * 0.4;
+    if (g._ring2) g._ring2.rotation.z = -t * 0.25;
+    if (g._ring3) g._ring3.rotation.y = t * 0.35;
+
+    // Orbiting icons
+    if (g._icon1) {
+      const a1 = t * 0.7;
+      g._icon1.position.set(Math.cos(a1) * 0.55, 0.8 + Math.sin(a1 * 2) * 0.15, Math.sin(a1) * 0.55);
+      g._icon1.rotation.y = t * 2;
+    }
+    if (g._icon2) {
+      const a2 = t * 0.5 + 2.1;
+      g._icon2.position.set(Math.cos(a2) * 0.65, 0.8 + Math.sin(a2 * 1.5) * 0.2, Math.sin(a2) * 0.65);
+      g._icon2.rotation.y = -t * 1.5;
+    }
+    if (g._icon3) {
+      const a3 = t * 0.6 + 4.2;
+      g._icon3.position.set(Math.cos(a3) * 0.75, 0.8 + Math.sin(a3 * 1.8) * 0.1, Math.sin(a3) * 0.75);
+      g._icon3.rotation.y = t * 1.8;
+    }
+
+    // Base ring pulse
+    if (g._baseRing) {
+      const bp = 1.0 + Math.sin(t * 1.5) * 0.03;
+      g._baseRing.scale.set(bp, bp, 1);
+      g._baseRing.material.emissiveIntensity = 0.4 + Math.sin(t * 2) * 0.2;
+    }
+
+    // Dome subtle pulse
+    if (g._dome) {
+      g._dome.material.opacity = 0.08 + Math.sin(t * 1.2) * 0.05;
+      g._dome.rotation.y = t * 0.1;
+    }
+
+    // Floating particles drift upward
+    if (g._particlePositions) {
+      const pos = g._particlePositions;
+      for (let i = 0; i < pos.length / 3; i++) {
+        pos[i * 3 + 1] += 0.003;
+        if (pos[i * 3 + 1] > 1.8) pos[i * 3 + 1] = 0.1;
       }
+      g._particles.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // Pulse ring (EKG-style wave traveling around)
+    if (g._pulseDots) {
+      g._pulseDots.forEach((dot, i) => {
+        const phase = (i / 60) * Math.PI * 2 - t * 3;
+        // EKG-style: flat with occasional spikes
+        let wave = 0;
+        const p = ((phase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        if (p < 0.3) wave = Math.sin(p / 0.3 * Math.PI) * 0.12;
+        else if (p < 0.5) wave = -Math.sin((p - 0.3) / 0.2 * Math.PI) * 0.05;
+        dot.position.y = wave;
+        // Glow the active segment
+        const brightness = wave !== 0 ? 1.0 : 0.3;
+        dot.material.color.setHSL(0.52, 0.9, brightness * 0.5);
+      });
+      g._pulseGroup.rotation.y = t * 0.15;
+    }
+
+    // === State-reactive behavior ===
+    if (window.nurseIsSpeaking) {
+      // Energetic: faster rotations, brighter glow
+      if (g._core) {
+        g._core.rotation.y = t * 1.2;
+        g._core.material.emissiveIntensity = 0.6 + Math.sin(t * 6) * 0.3;
+      }
+      if (g._inner) {
+        g._inner.material.emissiveIntensity = 0.8 + Math.sin(t * 5) * 0.2;
+      }
+      if (g._ring1) g._ring1.rotation.z = t * 1.5;
+      if (g._ring2) g._ring2.rotation.z = -t * 1.0;
       setNurseActivity('speaking', 'Speaking…');
     } else {
-      headGroup.rotation.x *= 0.92;
-      rightArm.rotation.z += (-0.15 - rightArm.rotation.z) * 0.06;
-      rightArm.rotation.x *= 0.92;
-      leftArm.rotation.z += (0.15 - leftArm.rotation.z) * 0.06;
-      if (nurseGroup._mouth) {
-        nurseGroup._mouth.scale.y += (1 - nurseGroup._mouth.scale.y) * 0.1;
-        nurseGroup._mouth.scale.x += (1 - nurseGroup._mouth.scale.x) * 0.1;
-      }
+      if (g._core) g._core.material.emissiveIntensity = 0.4;
       setNurseActivity('idle', 'Ready');
     }
   }
