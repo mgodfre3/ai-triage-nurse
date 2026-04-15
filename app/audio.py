@@ -42,7 +42,7 @@ async def transcribe_audio(audio_bytes: bytes, filename: str = "recording.webm")
 
         with open(wav_path, "rb") as audio_file:
             try:
-                transcription = client.audio.transcriptions.create(
+                transcription = await client.audio.transcriptions.create(
                     model=model,
                     file=audio_file,
                 )

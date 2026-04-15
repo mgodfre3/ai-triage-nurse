@@ -26,6 +26,17 @@
     <!-- Left: 3D Nurse Avatar -->
     <section id="nurse-panel">
       <div id="nurse-canvas-container"></div>
+      <div id="nurse-status">
+        <div id="nurse-name-badge">
+          <span class="badge-icon">🏥</span>
+          <span class="badge-name">Nurse Ada</span>
+          <span class="badge-title">AI Triage Specialist</span>
+        </div>
+        <div id="nurse-activity">
+          <span id="activity-dot" class="dot idle"></span>
+          <span id="activity-text">Ready</span>
+        </div>
+      </div>
     </section>
 
     <!-- Center: Chat Panel -->
@@ -133,6 +144,7 @@
   <div id="toast-container"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

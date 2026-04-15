@@ -1,6 +1,9 @@
 import json
 import logging
+import re
 from typing import AsyncGenerator, List
+
+from openai import AsyncOpenAI
 
 from app.foundry_manager import FoundryManager
 from app.models import (
@@ -11,6 +14,17 @@ from app.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Known tool names (allowlist for text-extracted tool calls)
+# ---------------------------------------------------------------------------
+_KNOWN_TOOLS = {"update_intake_form", "set_triage_priority", "add_symptom", "record_vitals"}
+
+# Tags to strip from model output
+_JUNK_TAGS = re.compile(
+    r'<\|?(?:im_start|im_end|tool_call|endoftext|/tool_call)\|?>',
+    re.IGNORECASE,
+)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -176,6 +190,8 @@ _DISPLAY_LABELS = {
 class TriageSession:
     """Manages a single triage conversation with tool-calling support."""
 
+    MAX_TOOL_ROUNDS = 10
+
     def __init__(self) -> None:
         self.form = TriageIntakeForm()
         self.messages: List[dict] = [
@@ -189,12 +205,13 @@ class TriageSession:
         """Process a user message and yield WSMessage objects."""
         self.messages.append({"role": "user", "content": user_text})
 
+        # Immediately signal "thinking" so the UI doesn't appear stalled
+        yield WSMessage(type="thinking", data={"active": True})
+
         manager = FoundryManager.get_instance()
         client = manager.get_chat_client()
         model = manager.get_chat_model()
 
-        # Tool-calling loop: keep calling the model until it stops
-        # requesting tool calls and produces a final text response.
         final_text = ""
         async for event in self._handle_tool_calls(client, model):
             yield event
@@ -204,31 +221,32 @@ class TriageSession:
         if last_msg["role"] == "assistant" and last_msg.get("content"):
             final_text = last_msg["content"]
 
-        # Stream the final text character-by-character for a typing effect.
+        # Clean any residual tool-call artifacts from the text
+        final_text = self._clean_response_text(final_text)
+
+        # Signal thinking done, then stream the response
+        yield WSMessage(type="thinking", data={"active": False})
+
         for char in final_text:
             yield WSMessage(type="chat_token", data={"token": char})
 
     # ------------------------------------------------------------------
-    # Tool-calling loop
+    # Tool-calling loop (async — uses AsyncOpenAI)
     # ------------------------------------------------------------------
-    MAX_TOOL_ROUNDS = 10  # prevent infinite loops from bad model output
-
-    async def _handle_tool_calls(self, client, model: str) -> AsyncGenerator[WSMessage, None]:
-        """Call the model in a loop, executing any requested tools each turn."""
+    async def _handle_tool_calls(self, client: AsyncOpenAI, model: str) -> AsyncGenerator[WSMessage, None]:
         for _round in range(self.MAX_TOOL_ROUNDS):
             try:
-                response = client.chat.completions.create(
+                response = await client.chat.completions.create(
                     model=model,
                     messages=self.messages,
                     tools=TOOLS,
                 )
             except Exception as e:
-                logger.error("Foundry Local API error: %s", e)
+                logger.error("Model API error: %s", e)
                 self.messages.append({
                     "role": "assistant",
                     "content": (
-                        "I'm sorry, I'm having trouble connecting to my AI service right now. "
-                        "Please ensure Foundry Local is running and try again. "
+                        "I'm sorry, I'm having trouble connecting to my AI service. "
                         f"(Error: {type(e).__name__})"
                     ),
                 })
@@ -237,7 +255,50 @@ class TriageSession:
             choice = response.choices[0]
             message = choice.message
 
-            # Append the raw assistant message (may contain tool_calls).
+            # ----------------------------------------------------------
+            # Handle text-embedded tool calls (qwen2.5 quirk)
+            # ----------------------------------------------------------
+            if not message.tool_calls and message.content:
+                text_tools, clean_text = self._extract_text_tool_calls(message.content)
+                if text_tools:
+                    logger.info("Extracted %d tool call(s) from text", len(text_tools))
+                    # Store assistant message
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": message.content,
+                    })
+                    # Execute each extracted tool and append results
+                    for tc in text_tools:
+                        fn_name = tc.get("name", "")
+                        fn_args = tc.get("arguments", {})
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except json.JSONDecodeError:
+                                continue
+                        result_text, events = self._execute_tool(fn_name, fn_args)
+                        for evt in events:
+                            yield evt
+                        # Append synthetic tool result for model context
+                        self.messages.append({
+                            "role": "assistant",
+                            "content": f"[Tool {fn_name} returned: {result_text}]",
+                        })
+
+                    # If there's clean human text, set it as final and return
+                    clean_text = self._clean_response_text(clean_text)
+                    if clean_text:
+                        self.messages.append({
+                            "role": "assistant",
+                            "content": clean_text,
+                        })
+                        return
+                    # No text left — loop to get the model's follow-up
+                    continue
+
+            # ----------------------------------------------------------
+            # Normal API tool_calls path
+            # ----------------------------------------------------------
             self.messages.append(message.to_dict() if hasattr(message, "to_dict") else {
                 "role": "assistant",
                 "content": message.content or "",
@@ -254,41 +315,135 @@ class TriageSession:
                 ]} if message.tool_calls else {}),
             })
 
-            # If the model didn't request any tool calls, we're done.
             if not message.tool_calls:
                 return
 
-            # Execute each requested tool and feed results back.
             for tool_call in message.tool_calls:
                 fn_name = tool_call.function.name
                 try:
                     args = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
-                    # Bad JSON from model — return error to model, don't mutate state
                     self.messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": "ERROR: malformed JSON arguments — please retry with valid JSON",
+                        "content": "ERROR: malformed JSON",
                     })
                     continue
 
                 result_text, events = self._execute_tool(fn_name, args)
-
-                # Yield any form-update / triage events to the frontend.
                 for evt in events:
                     yield evt
-
-                # Append the tool result so the model can continue.
                 self.messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": result_text,
                 })
 
-        # Exhausted MAX_TOOL_ROUNDS — force stop and warn
         yield WSMessage(type="error", data={
             "message": "Triage session hit tool-call limit. Please try again."
         })
+
+    # ------------------------------------------------------------------
+    # Brace-balanced JSON extractor for text-embedded tool calls
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _extract_balanced_json(text: str, start: int) -> str | None:
+        """From position `start` (which must be '{'), extract a complete JSON object
+        using brace counting.  Returns the JSON string or None."""
+        if start >= len(text) or text[start] != '{':
+            return None
+        depth = 0
+        in_string = False
+        escape_next = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return None
+
+    @classmethod
+    def _extract_text_tool_calls(cls, text: str) -> tuple[list[dict], str]:
+        """Extract tool-call objects embedded in model text output.
+
+        Uses brace-balanced extraction instead of regex to handle nested JSON.
+        Returns (list_of_tool_dicts, remaining_clean_text).
+        """
+        tool_calls: list[dict] = []
+        # Track regions to remove
+        regions_to_remove: list[tuple[int, int]] = []
+
+        # Find <tool_call> or <|tool_call|> blocks
+        for m in re.finditer(r'<\|?tool_call\|?>?', text, re.IGNORECASE):
+            search_start = m.end()
+            # Skip whitespace
+            while search_start < len(text) and text[search_start] in ' \t\n\r':
+                search_start += 1
+            if search_start < len(text) and text[search_start] == '{':
+                json_str = cls._extract_balanced_json(text, search_start)
+                if json_str:
+                    try:
+                        data = json.loads(json_str)
+                        if data.get("name") in _KNOWN_TOOLS:
+                            tool_calls.append(data)
+                            # Find the end tag if present
+                            end_pos = search_start + len(json_str)
+                            end_match = re.match(r'\s*</?\|?tool_call\|?>?', text[end_pos:], re.IGNORECASE)
+                            if end_match:
+                                end_pos += end_match.end()
+                            regions_to_remove.append((m.start(), end_pos))
+                    except json.JSONDecodeError:
+                        pass
+
+        # Also find bare JSON objects that look like tool calls (no tags)
+        if not tool_calls:
+            for m in re.finditer(r'\{', text):
+                json_str = cls._extract_balanced_json(text, m.start())
+                if json_str and len(json_str) > 10:
+                    try:
+                        data = json.loads(json_str)
+                        if data.get("name") in _KNOWN_TOOLS and "arguments" in data:
+                            tool_calls.append(data)
+                            regions_to_remove.append((m.start(), m.start() + len(json_str)))
+                    except json.JSONDecodeError:
+                        pass
+
+        # Build clean text by removing extracted regions
+        if regions_to_remove:
+            # Sort by start position descending to remove from end first
+            regions_to_remove.sort(key=lambda r: r[0], reverse=True)
+            clean = text
+            for start, end in regions_to_remove:
+                clean = clean[:start] + clean[end:]
+        else:
+            clean = text
+
+        return tool_calls, clean
+
+    @staticmethod
+    def _clean_response_text(text: str) -> str:
+        """Remove residual model control tags and artifacts from response text."""
+        if not text:
+            return ""
+        text = _JUNK_TAGS.sub("", text)
+        text = re.sub(r'</?tool_call[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'assistant\s*\n*', '', text)  # stray "assistant" role label
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
 
     # ------------------------------------------------------------------
     # Tool implementations
