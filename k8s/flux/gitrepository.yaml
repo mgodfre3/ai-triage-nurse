@@ -1,6 +1,6 @@
 # =============================================================================
 # Flux GitRepository — source for the ai-triage-nurse repo
-# TODO: Replace YOUR_ORG with your GitHub org or username
+# TODO: Replace mgodfre3 with your GitHub org or username
 # =============================================================================
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
@@ -9,7 +9,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/YOUR_ORG/ai-triage-nurse
+  url: https://github.com/mgodfre3/ai-triage-nurse
   ref:
     branch: main
   secretRef:

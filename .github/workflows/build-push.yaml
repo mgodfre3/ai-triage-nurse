@@ -10,9 +10,9 @@ on:
       - main
 
 env:
-  # TODO: Replace YOUR_ORG with your GitHub org or username
+  # TODO: Replace mgodfre3 with your GitHub org or username
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/YOUR_ORG/ai-triage-nurse
+  IMAGE_NAME: ghcr.io/mgodfre3/ai-triage-nurse
 
 jobs:
   build-and-push:

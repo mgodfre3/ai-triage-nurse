@@ -42,7 +42,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Repo metadata
-LABEL org.opencontainers.image.source="https://github.com/YOUR_ORG/ai-triage-nurse" \
+LABEL org.opencontainers.image.source="https://github.com/mgodfre3/ai-triage-nurse" \
       org.opencontainers.image.description="AI Triage Nurse demo app" \
       org.opencontainers.image.licenses="MIT"
 

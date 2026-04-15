@@ -11,7 +11,7 @@ metadata:
     app: ai-triage-nurse
   annotations:
     # TODO: Replace with your Azure resource group containing the AKS cluster
-    service.beta.kubernetes.io/azure-load-balancer-resource-group: "YOUR_RESOURCE_GROUP"
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: "acx-ainurse-denver"
 spec:
   type: LoadBalancer
   selector:

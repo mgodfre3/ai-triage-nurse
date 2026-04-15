@@ -39,8 +39,8 @@ spec:
 
       containers:
         - name: ai-triage-nurse
-          # TODO: Replace YOUR_ORG with your GitHub org or username
-          image: ghcr.io/YOUR_ORG/ai-triage-nurse:latest
+          # TODO: Replace mgodfre3 with your GitHub org or username
+          image: ghcr.io/mgodfre3/ai-triage-nurse:latest
           ports:
             - containerPort: 8080
               protocol: TCP
