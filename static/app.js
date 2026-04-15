@@ -256,8 +256,18 @@
 
   function initThreeScene() {
     const container = document.getElementById("nurse-canvas-container");
+    if (!container) { console.error('[3d] No container found'); return; }
+    
+    // Wait for container to have actual dimensions
     const w = container.clientWidth || 300;
-    const h = container.clientHeight || 500;
+    const h = container.clientHeight || 400;
+    console.log('[3d] Container size:', w, 'x', h);
+
+    if (typeof THREE === 'undefined') {
+      console.error('[3d] Three.js not loaded — CDN may be unreachable');
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:.85rem;text-align:center;padding:1rem;">3D viewer unavailable<br><small>Three.js CDN unreachable</small></div>';
+      return;
+    }
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a1628);
@@ -314,71 +324,77 @@
       else crossFadeTo('idle');
     };
 
+    // Always build procedural nurse first as immediate visual
+    buildProceduralNurse(scene);
+    console.log('[3d] Procedural nurse built as default');
+
     if (typeof THREE.GLTFLoader !== 'undefined') {
+      console.log('[3d] GLTFLoader available, loading nurse.glb...');
       const loader = new THREE.GLTFLoader();
       loader.load(
         '/static/nurse.glb',
         (gltf) => {
-          const model = gltf.scene;
+          try {
+            // Remove procedural nurse
+            if (nurseGroup) { scene.remove(nurseGroup); nurseGroup = null; }
 
-          // Tint the model to look more like nurse scrubs (teal tone)
-          model.traverse((child) => {
-            if (child.isMesh && child.material) {
-              const mats = Array.isArray(child.material) ? child.material : [child.material];
-              mats.forEach((mat) => {
-                // Boost emissive slightly for visibility on dark bg
-                if (mat.emissive) mat.emissive.set(0x0a1a2a);
-                mat.needsUpdate = true;
-              });
+            const model = gltf.scene;
+
+            model.traverse((child) => {
+              if (child.isMesh && child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach((mat) => {
+                  if (mat.emissive) mat.emissive.set(0x0a1a2a);
+                  mat.needsUpdate = true;
+                });
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const height = box.max.y - box.min.y;
+            model.position.set(-center.x, -box.min.y - 0.8, -center.z);
+            camera.position.set(0, height * 0.45, height * 1.6);
+            camera.lookAt(0, height * 0.4, 0);
+            scene.add(model);
+            modelLoaded = true;
+
+            if (gltf.animations && gltf.animations.length) {
+              mixer = new THREE.AnimationMixer(model);
+              const clips = {};
+              gltf.animations.forEach(a => { clips[a.name.toLowerCase()] = a; });
+              console.log('[3d] Available animations:', Object.keys(clips).join(', '));
+
+              gltfActions.idle = mixer.clipAction(
+                clips.idle || clips.breathing || clips.stand || gltf.animations[0]
+              );
+              gltfActions.speak = mixer.clipAction(
+                clips.talking || clips.talk || clips.agree || clips.walk || gltf.animations[Math.min(1, gltf.animations.length - 1)]
+              );
+              gltfActions.think = mixer.clipAction(
+                clips.thinking || clips.sad_pose || clips.headshake || gltf.animations[0]
+              );
+
+              gltfActions.idle.play();
+              activeAction = gltfActions.idle;
             }
-          });
 
-          // Center & position model
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const height = box.max.y - box.min.y;
-          model.position.set(-center.x, -box.min.y - 0.8, -center.z);
-          camera.position.set(0, height * 0.45, height * 1.6);
-          camera.lookAt(0, height * 0.4, 0);
-          scene.add(model);
-          modelLoaded = true;
-
-          // Map animations by name
-          if (gltf.animations && gltf.animations.length) {
-            mixer = new THREE.AnimationMixer(model);
-            const clips = {};
-            gltf.animations.forEach(a => { clips[a.name.toLowerCase()] = a; });
-            console.log('[3d] Available animations:', Object.keys(clips).join(', '));
-
-            // Map to our states
-            gltfActions.idle = mixer.clipAction(
-              clips.idle || clips.breathing || clips.stand || gltf.animations[0]
-            );
-            gltfActions.speak = mixer.clipAction(
-              clips.talking || clips.talk || clips.agree || clips.walk || gltf.animations[Math.min(1, gltf.animations.length - 1)]
-            );
-            gltfActions.think = mixer.clipAction(
-              clips.thinking || clips.sad_pose || clips.headshake || gltfActions.idle.getClip()
-            );
-            gltfActions.agree = mixer.clipAction(
-              clips.agree || clips.idle || gltf.animations[0]
-            );
-
-            // Start idle
-            gltfActions.idle.play();
-            activeAction = gltfActions.idle;
+            console.log('[3d] GLTF nurse model loaded (' + height.toFixed(1) + ' units tall)');
+          } catch (err) {
+            console.error('[3d] Error setting up GLTF model:', err);
+            // Procedural already removed — rebuild it
+            buildProceduralNurse(scene);
           }
-
-          console.log('[3d] GLTF nurse model loaded (' + (height).toFixed(1) + ' units tall)');
         },
-        undefined,
-        () => {
-          console.log('[3d] No GLTF model found, using procedural nurse');
-          buildProceduralNurse(scene);
+        (xhr) => {
+          if (xhr.total) console.log('[3d] Loading: ' + Math.round(xhr.loaded / xhr.total * 100) + '%');
+        },
+        (err) => {
+          console.warn('[3d] GLTF load failed:', err, '— keeping procedural nurse');
         }
       );
     } else {
-      buildProceduralNurse(scene);
+      console.warn('[3d] GLTFLoader not available (CDN may be blocked)');
     }
 
     /* --- Animation loop --- */
