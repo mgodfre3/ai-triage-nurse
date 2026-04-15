@@ -283,17 +283,16 @@
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
-    /* --- Lights (improved for character rendering) --- */
-    scene.add(new THREE.AmbientLight(0xc4d4e8, 0.6));
-    const key = new THREE.DirectionalLight(0xfff8f0, 1.0);
-    key.position.set(2, 4, 3);
-    key.castShadow = true;
+    /* --- Lights (soft studio lighting for character) --- */
+    scene.add(new THREE.AmbientLight(0xe8e0d8, 0.7));
+    const key = new THREE.DirectionalLight(0xfff4e8, 0.9);
+    key.position.set(2, 3, 4);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0x88ccdd, 0.4);
-    fill.position.set(-3, 2, 1);
+    const fill = new THREE.DirectionalLight(0xd0e8f0, 0.5);
+    fill.position.set(-3, 2, 2);
     scene.add(fill);
-    const rim = new THREE.DirectionalLight(0x4488aa, 0.3);
-    rim.position.set(0, 3, -3);
+    const rim = new THREE.DirectionalLight(0x88bbdd, 0.25);
+    rim.position.set(0, 2, -3);
     scene.add(rim);
 
     // Subtle floor grid for depth
@@ -344,7 +343,9 @@
               if (child.isMesh && child.material) {
                 const mats = Array.isArray(child.material) ? child.material : [child.material];
                 mats.forEach((mat) => {
-                  if (mat.emissive) mat.emissive.set(0x0a1a2a);
+                  // Smooth shading and subtle shininess
+                  mat.roughness = 0.85;
+                  mat.metalness = 0.0;
                   mat.needsUpdate = true;
                 });
               }
@@ -428,27 +429,24 @@
       // Update GLTF animations (if clips exist)
       if (mixer) mixer.update(dt);
 
-      // Procedural sway for static GLTF model (no animation clips)
+      // Procedural micro-animation for static GLTF model
       if (modelLoaded && !mixer && window._gltfModel) {
         const m = window._gltfModel;
-        const baseY = window._gltfBaseY || 0;
-        // Gentle breathing (Y bob)
-        m.position.y = baseY + Math.sin(t * 1.5) * 0.15;
-        // Subtle body sway
-        m.rotation.y = Math.sin(t * 0.8) * 0.04;
+        // Very subtle breathing — barely perceptible scale pulse
+        const breath = 1.0 + Math.sin(t * 1.2) * 0.003;
+        m.scale.set(breath, breath, breath);
 
         if (_nurseState === 'speaking') {
-          // More lively — slight lean and faster sway
-          m.rotation.z = Math.sin(t * 3) * 0.02;
-          m.rotation.y = Math.sin(t * 1.5) * 0.08;
+          m.rotation.y = Math.sin(t * 2.0) * 0.015;
+          m.rotation.z = Math.sin(t * 2.5) * 0.005;
         } else if (_nurseState === 'thinking') {
-          // Slight head tilt
-          m.rotation.z = 0.03;
-          m.rotation.x = Math.sin(t * 0.5) * 0.02;
-        } else {
+          m.rotation.y = 0.02;
           m.rotation.z = 0;
-          m.rotation.x = 0;
+        } else {
+          m.rotation.y = Math.sin(t * 0.4) * 0.005;
+          m.rotation.z = 0;
         }
+        m.rotation.x = 0;
       }
 
       // Procedural animations (only if no GLTF model loaded)
