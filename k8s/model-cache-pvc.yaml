@@ -12,8 +12,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  # Use "azurefile-csi-premium" for Azure Files (RWX), or adjust for your cluster
-  storageClassName: azurefile-csi-premium
+  # Use Longhorn for RWX on Azure Local
+  storageClassName: longhorn
   resources:
     requests:
       storage: 20Gi

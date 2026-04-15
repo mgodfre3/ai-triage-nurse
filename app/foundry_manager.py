@@ -2,13 +2,24 @@ import logging
 import os
 import threading
 
-from foundry_local_sdk import FoundryLocalManager, Configuration
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Foundry Local exposes an OpenAI-compatible API at a local endpoint.
+# In containerized deployments the Foundry Local service runs on the host
+# (or as a DaemonSet) and the app connects via FOUNDRY_API_BASE.
+#
+# For local development with the Foundry Local CLI running, the default
+# endpoint is http://localhost:5273/v1.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_API_BASE = "http://localhost:5273/v1"
+
 
 class FoundryManager:
-    """Singleton manager for Foundry Local chat and audio models."""
+    """Singleton manager wrapping an OpenAI-compatible client for Foundry Local."""
 
     _instance: "FoundryManager | None" = None
     _lock = threading.Lock()
@@ -23,9 +34,10 @@ class FoundryManager:
                 if cls._instance is None:
                     obj = object.__new__(cls)
                     obj._initialized = False
+                    obj._chat_client = None
+                    obj._audio_client = None
                     obj._chat_model = None
                     obj._audio_model = None
-                    obj._manager = None
                     obj._initialize()
                     cls._instance = obj
         return cls._instance
@@ -34,77 +46,53 @@ class FoundryManager:
     # Initialization
     # ------------------------------------------------------------------
     def _initialize(self) -> None:
-        logger.info("Initializing Foundry Local manager …")
-        config = Configuration(app_name="ai_triage_nurse")
-        FoundryLocalManager.initialize(config)
-        self._manager = FoundryLocalManager.instance
+        api_base = os.environ.get("FOUNDRY_API_BASE", _DEFAULT_API_BASE)
+        api_key = os.environ.get("FOUNDRY_API_KEY", "foundry-local")  # placeholder key
 
-        # Download execution providers (DirectML, CUDA, etc.)
-        self._manager.download_and_register_eps()
+        logger.info("Connecting to Foundry Local at %s", api_base)
 
-        # --- Chat model (env override → phi-4-mini → qwen2.5-0.5b) ---
-        chat_alias = os.environ.get("FOUNDRY_MODEL_CHAT") or self._resolve_chat_model()
-        logger.info("Loading chat model: %s", chat_alias)
-        self._chat_model = self._manager.catalog.get_model(chat_alias)
-        self._chat_model.download()
-        self._chat_model.load()
+        self._chat_model = os.environ.get("FOUNDRY_MODEL_CHAT", "phi-4-mini")
+        self._audio_model = os.environ.get("FOUNDRY_MODEL_AUDIO", "whisper-tiny")
 
-        # --- Audio model (env override → whisper-tiny) ---
-        audio_alias = os.environ.get("FOUNDRY_MODEL_AUDIO", "whisper-tiny")
-        logger.info("Loading audio model: %s", audio_alias)
-        self._audio_model = self._manager.catalog.get_model(audio_alias)
-        self._audio_model.download()
-        self._audio_model.load()
+        self._chat_client = OpenAI(base_url=api_base, api_key=api_key)
+        self._audio_client = OpenAI(base_url=api_base, api_key=api_key)
 
         self._initialized = True
-        logger.info("Foundry Local models ready.")
-
-    def _resolve_chat_model(self) -> str:
-        """Try phi-4-mini first; fall back to qwen2.5-0.5b if unavailable."""
-        try:
-            self._manager.catalog.get_model("phi-4-mini")
-            return "phi-4-mini"
-        except Exception:
-            logger.warning(
-                "phi-4-mini not found in catalog – falling back to qwen2.5-0.5b"
-            )
-            return "qwen2.5-0.5b"
+        logger.info("FoundryManager ready — chat: %s, audio: %s",
+                     self._chat_model, self._audio_model)
 
     # ------------------------------------------------------------------
     # Public accessors
     # ------------------------------------------------------------------
-    def get_chat_client(self):
-        """Return a chat client from the loaded chat model."""
-        if self._chat_model is None:
-            raise RuntimeError("Chat model not initialized")
-        return self._chat_model.get_chat_client()
+    def get_chat_client(self) -> OpenAI:
+        """Return the OpenAI client for chat completions."""
+        if self._chat_client is None:
+            raise RuntimeError("Chat client not initialized")
+        return self._chat_client
 
-    def get_audio_client(self):
-        """Return an audio client from the loaded Whisper model."""
-        if self._audio_model is None:
-            raise RuntimeError("Audio model not initialized")
-        return self._audio_model.get_audio_client()
+    def get_chat_model(self) -> str:
+        """Return the chat model name to use in API calls."""
+        return self._chat_model
+
+    def get_audio_client(self) -> OpenAI:
+        """Return the OpenAI client for audio transcription."""
+        if self._audio_client is None:
+            raise RuntimeError("Audio client not initialized")
+        return self._audio_client
+
+    def get_audio_model(self) -> str:
+        """Return the audio model name to use in API calls."""
+        return self._audio_model
 
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
     def shutdown(self) -> None:
-        """Unload both models and tear down the manager."""
-        logger.info("Shutting down Foundry Local models …")
-        if self._chat_model is not None:
-            try:
-                self._chat_model.unload()
-            except Exception as exc:
-                logger.warning("Error unloading chat model: %s", exc)
-            self._chat_model = None
-
-        if self._audio_model is not None:
-            try:
-                self._audio_model.unload()
-            except Exception as exc:
-                logger.warning("Error unloading audio model: %s", exc)
-            self._audio_model = None
-
+        """Reset the singleton."""
+        logger.info("Shutting down FoundryManager …")
+        self._chat_client = None
+        self._audio_client = None
         self._initialized = False
         FoundryManager._instance = None
-        logger.info("Foundry Local shutdown complete.")
+        logger.info("FoundryManager shutdown complete.")
+

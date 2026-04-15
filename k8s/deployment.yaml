@@ -12,7 +12,7 @@ metadata:
     app: ai-triage-nurse
     component: server
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: ai-triage-nurse
@@ -37,15 +37,22 @@ spec:
                         - ai-triage-nurse
                 topologyKey: kubernetes.io/hostname
 
+      imagePullSecrets:
+        - name: ghcr-secret
+
       containers:
         - name: ai-triage-nurse
           # TODO: Replace mgodfre3 with your GitHub org or username
-          image: ghcr.io/mgodfre3/ai-triage-nurse:latest
+          image: ghcr.io/mgodfre3/ai-triage-nurse:v1.0.2
           ports:
             - containerPort: 8080
               protocol: TCP
 
           env:
+            - name: FOUNDRY_API_BASE
+              value: "http://localhost:5273/v1"
+            - name: FOUNDRY_API_KEY
+              value: "foundry-local"
             - name: FOUNDRY_MODEL_CHAT
               value: "phi-4-mini"
             - name: FOUNDRY_MODEL_AUDIO
@@ -55,11 +62,11 @@ spec:
 
           resources:
             requests:
+              cpu: "500m"
+              memory: 2Gi
+            limits:
               cpu: "2"
               memory: 4Gi
-            limits:
-              cpu: "4"
-              memory: 8Gi
 
           # --- Startup probe: generous timeout for first-run model downloads ---
           startupProbe:
@@ -83,16 +90,7 @@ spec:
             httpGet:
               path: /health
               port: 8080
-            initialDelaySeconds: 60
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-
-          volumeMounts:
-            - name: model-cache
-              mountPath: /home/appuser/.foundry-local
-
-      volumes:
-        - name: model-cache
-          persistentVolumeClaim:
-            claimName: model-cache-pvc

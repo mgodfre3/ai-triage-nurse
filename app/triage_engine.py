@@ -190,16 +190,16 @@ class TriageSession:
         self.messages.append({"role": "user", "content": user_text})
 
         manager = FoundryManager.get_instance()
-        chat_client = manager.get_chat_client()
+        client = manager.get_chat_client()
+        model = manager.get_chat_model()
 
         # Tool-calling loop: keep calling the model until it stops
         # requesting tool calls and produces a final text response.
         final_text = ""
-        async for event in self._handle_tool_calls(chat_client):
+        async for event in self._handle_tool_calls(client, model):
             yield event
 
         # After the loop, the last assistant message contains the text reply.
-        # Retrieve it from self.messages (appended inside _handle_tool_calls).
         last_msg = self.messages[-1]
         if last_msg["role"] == "assistant" and last_msg.get("content"):
             final_text = last_msg["content"]
@@ -213,11 +213,12 @@ class TriageSession:
     # ------------------------------------------------------------------
     MAX_TOOL_ROUNDS = 10  # prevent infinite loops from bad model output
 
-    async def _handle_tool_calls(self, chat_client) -> AsyncGenerator[WSMessage, None]:
+    async def _handle_tool_calls(self, client, model: str) -> AsyncGenerator[WSMessage, None]:
         """Call the model in a loop, executing any requested tools each turn."""
         for _round in range(self.MAX_TOOL_ROUNDS):
-            response = chat_client.complete_chat(
-                self.messages,
+            response = client.chat.completions.create(
+                model=model,
+                messages=self.messages,
                 tools=TOOLS,
             )
 
