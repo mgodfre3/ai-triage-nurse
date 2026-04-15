@@ -216,11 +216,23 @@ class TriageSession:
     async def _handle_tool_calls(self, client, model: str) -> AsyncGenerator[WSMessage, None]:
         """Call the model in a loop, executing any requested tools each turn."""
         for _round in range(self.MAX_TOOL_ROUNDS):
-            response = client.chat.completions.create(
-                model=model,
-                messages=self.messages,
-                tools=TOOLS,
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=self.messages,
+                    tools=TOOLS,
+                )
+            except Exception as e:
+                logger.error("Foundry Local API error: %s", e)
+                self.messages.append({
+                    "role": "assistant",
+                    "content": (
+                        "I'm sorry, I'm having trouble connecting to my AI service right now. "
+                        "Please ensure Foundry Local is running and try again. "
+                        f"(Error: {type(e).__name__})"
+                    ),
+                })
+                return
 
             choice = response.choices[0]
             message = choice.message

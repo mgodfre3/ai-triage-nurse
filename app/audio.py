@@ -1,9 +1,12 @@
 import tempfile
 import os
+import logging
 import subprocess
 import shutil
 
 from app.foundry_manager import FoundryManager
+
+logger = logging.getLogger(__name__)
 
 
 async def transcribe_audio(audio_bytes: bytes, filename: str = "recording.webm") -> str:
@@ -38,11 +41,15 @@ async def transcribe_audio(audio_bytes: bytes, filename: str = "recording.webm")
             wav_path = src_path
 
         with open(wav_path, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model=model,
-                file=audio_file,
-            )
-        return transcription.text.strip()
+            try:
+                transcription = client.audio.transcriptions.create(
+                    model=model,
+                    file=audio_file,
+                )
+                return transcription.text.strip()
+            except Exception as e:
+                logger.error("Audio transcription error: %s", e)
+                return f"[Transcription unavailable — Foundry Local not reachable: {type(e).__name__}]"
     finally:
         for p in {src_path, wav_path}:
             try:
