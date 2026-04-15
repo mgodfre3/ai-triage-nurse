@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 
 from foundry_local_sdk import FoundryLocalManager, Configuration
@@ -41,16 +42,17 @@ class FoundryManager:
         # Download execution providers (DirectML, CUDA, etc.)
         self._manager.download_and_register_eps()
 
-        # --- Chat model (prefer phi-4-mini, fall back to qwen2.5-0.5b) ---
-        chat_alias = self._resolve_chat_model()
+        # --- Chat model (env override → phi-4-mini → qwen2.5-0.5b) ---
+        chat_alias = os.environ.get("FOUNDRY_MODEL_CHAT") or self._resolve_chat_model()
         logger.info("Loading chat model: %s", chat_alias)
         self._chat_model = self._manager.catalog.get_model(chat_alias)
         self._chat_model.download()
         self._chat_model.load()
 
-        # --- Audio model (whisper-tiny) ---
-        logger.info("Loading audio model: whisper-tiny")
-        self._audio_model = self._manager.catalog.get_model("whisper-tiny")
+        # --- Audio model (env override → whisper-tiny) ---
+        audio_alias = os.environ.get("FOUNDRY_MODEL_AUDIO", "whisper-tiny")
+        logger.info("Loading audio model: %s", audio_alias)
+        self._audio_model = self._manager.catalog.get_model(audio_alias)
         self._audio_model.download()
         self._audio_model.load()
 

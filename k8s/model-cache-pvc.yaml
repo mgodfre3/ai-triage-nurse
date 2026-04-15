@@ -11,9 +11,9 @@ metadata:
     app: ai-triage-nurse
 spec:
   accessModes:
-    - ReadWriteOnce
-  # Use "managed-premium" for Azure managed disks, or "default" for cluster default
-  storageClassName: managed-premium
+    - ReadWriteMany
+  # Use "azurefile-csi-premium" for Azure Files (RWX), or adjust for your cluster
+  storageClassName: azurefile-csi-premium
   resources:
     requests:
       storage: 20Gi

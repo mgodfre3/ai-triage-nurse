@@ -211,9 +211,11 @@ class TriageSession:
     # ------------------------------------------------------------------
     # Tool-calling loop
     # ------------------------------------------------------------------
+    MAX_TOOL_ROUNDS = 10  # prevent infinite loops from bad model output
+
     async def _handle_tool_calls(self, chat_client) -> AsyncGenerator[WSMessage, None]:
         """Call the model in a loop, executing any requested tools each turn."""
-        while True:
+        for _round in range(self.MAX_TOOL_ROUNDS):
             response = chat_client.complete_chat(
                 self.messages,
                 tools=TOOLS,
@@ -243,13 +245,24 @@ class TriageSession:
             if not message.tool_calls:
                 return
 
+        # Exhausted MAX_TOOL_ROUNDS — force stop and warn
+        yield WSMessage(type="error", data={
+            "message": "Triage session hit tool-call limit. Please try again."
+        })
+
             # Execute each requested tool and feed results back.
             for tool_call in message.tool_calls:
                 fn_name = tool_call.function.name
                 try:
                     args = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
-                    args = {}
+                    # Bad JSON from model — return error to model, don't mutate state
+                    self.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": "ERROR: malformed JSON arguments — please retry with valid JSON",
+                    })
+                    continue
 
                 result_text, events = self._execute_tool(fn_name, args)
 
@@ -321,7 +334,7 @@ class TriageSession:
         try:
             priority = TriagePriority(level_str)
         except ValueError:
-            priority = TriagePriority.GREEN
+            return f"ERROR: invalid triage level '{level_str}'. Must be one of: green, yellow, orange, red", []
 
         self.form.triage_priority = priority
         self.form.triage_reasoning = reasoning
