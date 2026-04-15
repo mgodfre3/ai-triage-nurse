@@ -350,12 +350,18 @@
               }
             });
 
+            // Model is pre-normalized to ~2 units tall, feet at y=0
             const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
             const height = box.max.y - box.min.y;
-            model.position.set(-center.x, -box.min.y - 0.8, -center.z);
-            camera.position.set(0, height * 0.45, height * 1.6);
-            camera.lookAt(0, height * 0.4, 0);
+            console.log('[3d] Model height:', height.toFixed(2), 'units');
+
+            // Position: shift down slightly so feet touch the grid
+            model.position.set(0, -0.8, 0);
+
+            // Camera: frame the upper body nicely
+            camera.position.set(0, 0.8, 3.2);
+            camera.lookAt(0, 0.5, 0);
+
             scene.add(model);
             modelLoaded = true;
 
