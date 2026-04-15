@@ -323,151 +323,19 @@
       else crossFadeTo('idle');
     };
 
-    // Always build procedural nurse first as immediate visual
+    // Use stylized procedural nurse — intentionally designed, avoids uncanny valley
     buildProceduralNurse(scene);
-    console.log('[3d] Procedural nurse built as default');
-
-    if (typeof THREE.GLTFLoader !== 'undefined') {
-      console.log('[3d] GLTFLoader available, loading nurse.glb...');
-      const loader = new THREE.GLTFLoader();
-      loader.load(
-        '/static/nurse.glb',
-        (gltf) => {
-          try {
-            // Remove procedural nurse
-            if (nurseGroup) { scene.remove(nurseGroup); nurseGroup = null; }
-
-            const model = gltf.scene;
-
-            // Paint model with vivid vertex colors based on height
-            // Model is normalized: feet at y=0, head at y=2
-            model.traverse((child) => {
-              if (child.isMesh && child.geometry) {
-                const geo = child.geometry;
-                const pos = geo.attributes.position;
-                if (!pos) return;
-                const colors = new Float32Array(pos.count * 3);
-                for (let i = 0; i < pos.count; i++) {
-                  const y = pos.getY(i);
-                  let r, g, b;
-                  if (y > 1.72)      { r = 0.23; g = 0.15; b = 0.09; } // dark brown hair
-                  else if (y > 1.58) { r = 0.91; g = 0.72; b = 0.62; } // skin tone
-                  else if (y > 0.45) { r = 0.18; g = 0.66; b = 0.63; } // teal scrubs
-                  else if (y > 0.15) { r = 0.22; g = 0.31; b = 0.41; } // navy pants
-                  else               { r = 0.93; g = 0.93; b = 0.93; } // white shoes
-                  colors[i * 3]     = r;
-                  colors[i * 3 + 1] = g;
-                  colors[i * 3 + 2] = b;
-                }
-                geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                child.material = new THREE.MeshStandardMaterial({
-                  vertexColors: true,
-                  roughness: 0.65,
-                  metalness: 0.0,
-                });
-              }
-            });
-
-            // Model is pre-normalized to ~2 units tall, feet at y=0
-            const box = new THREE.Box3().setFromObject(model);
-            const height = box.max.y - box.min.y;
-            console.log('[3d] Model height:', height.toFixed(2), 'units');
-
-            // Position: shift down slightly so feet touch the grid
-            model.position.set(0, -0.8, 0);
-
-            // Camera: frame the upper body nicely
-            camera.position.set(0, 0.8, 3.2);
-            camera.lookAt(0, 0.5, 0);
-
-            scene.add(model);
-            modelLoaded = true;
-
-            if (gltf.animations && gltf.animations.length) {
-              mixer = new THREE.AnimationMixer(model);
-              const clips = {};
-              gltf.animations.forEach(a => { clips[a.name.toLowerCase()] = a; });
-              console.log('[3d] Available animations:', Object.keys(clips).join(', '));
-
-              gltfActions.idle = mixer.clipAction(
-                clips.idle || clips.breathing || clips.stand || gltf.animations[0]
-              );
-              gltfActions.speak = mixer.clipAction(
-                clips.talking || clips.talk || clips.agree || clips.walk || gltf.animations[Math.min(1, gltf.animations.length - 1)]
-              );
-              gltfActions.think = mixer.clipAction(
-                clips.thinking || clips.sad_pose || clips.headshake || gltf.animations[0]
-              );
-
-              gltfActions.idle.play();
-              activeAction = gltfActions.idle;
-            } else {
-              console.log('[3d] No embedded animations — using procedural sway');
-            }
-
-            // Store model ref for procedural animation on static models
-            window._gltfModel = model;
-            window._gltfBaseY = model.position.y;
-
-            console.log('[3d] GLTF nurse model loaded (' + height.toFixed(1) + ' units tall)');
-          } catch (err) {
-            console.error('[3d] Error setting up GLTF model:', err);
-            // Procedural already removed — rebuild it
-            buildProceduralNurse(scene);
-          }
-        },
-        (xhr) => {
-          if (xhr.total) console.log('[3d] Loading: ' + Math.round(xhr.loaded / xhr.total * 100) + '%');
-        },
-        (err) => {
-          console.warn('[3d] GLTF load failed:', err, '— keeping procedural nurse');
-        }
-      );
-    } else {
-      console.warn('[3d] GLTFLoader not available (CDN may be blocked)');
-    }
+    console.log('[3d] Stylized nurse character built');
 
     /* --- Animation loop --- */
     const clock = new THREE.Clock();
-    let _nurseState = 'idle'; // track current nurse activity state
-
-    // Override _nurseAnimate to also track state for procedural motion
-    const origAnimate = window._nurseAnimate;
-    window._nurseAnimate = function (state) {
-      _nurseState = state;
-      if (origAnimate) origAnimate(state);
-    };
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
       const t = clock.getElapsedTime();
 
-      // Update GLTF animations (if clips exist)
-      if (mixer) mixer.update(dt);
-
-      // Procedural micro-animation for static GLTF model
-      if (modelLoaded && !mixer && window._gltfModel) {
-        const m = window._gltfModel;
-        // Very subtle breathing — barely perceptible scale pulse
-        const breath = 1.0 + Math.sin(t * 1.2) * 0.003;
-        m.scale.set(breath, breath, breath);
-
-        if (_nurseState === 'speaking') {
-          m.rotation.y = Math.sin(t * 2.0) * 0.015;
-          m.rotation.z = Math.sin(t * 2.5) * 0.005;
-        } else if (_nurseState === 'thinking') {
-          m.rotation.y = 0.02;
-          m.rotation.z = 0;
-        } else {
-          m.rotation.y = Math.sin(t * 0.4) * 0.005;
-          m.rotation.z = 0;
-        }
-        m.rotation.x = 0;
-      }
-
-      // Procedural animations (only if no GLTF model loaded)
-      if (!modelLoaded && nurseGroup) {
+      if (nurseGroup) {
         animateProceduralNurse(t);
       }
 
