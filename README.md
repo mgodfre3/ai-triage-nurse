@@ -39,14 +39,21 @@ Voice input is supported through the Whisper-tiny model, also running locally.
 git clone https://github.com/<org>/ai-triage-nurse.git
 cd ai-triage-nurse
 
-# 2. Install Python dependencies
+# 2. Configure — edit ONE file with your values
+cp .env.example .env
+#    ↳ Open .env and set GITHUB_ORG + AZURE_RESOURCE_GROUP
+
+# 3. Stamp config into K8s manifests / Dockerfile / CI
+python setup.py
+
+# 4. Install Python dependencies
 pip install -r requirements.txt
 
-# 3. Pull the required models (first run only)
+# 5. Pull the required models (first run only)
 foundry model run phi-4-mini
 foundry model run whisper-tiny
 
-# 4. Start the server
+# 6. Start the server
 python -m app.main
 ```
 

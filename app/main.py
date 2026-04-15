@@ -1,8 +1,13 @@
 """AI Triage Nurse — FastAPI server for the medical intake simulator demo."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Load .env file if present (for local development)
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
@@ -16,6 +21,8 @@ from app.models import WSMessage
 from app.triage_engine import TriageSession
 
 logger = logging.getLogger(__name__)
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -118,4 +125,5 @@ async def websocket_endpoint(ws: WebSocket):
 # Entrypoint
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=False)
+    port = int(os.environ.get("APP_PORT", "8080"))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
