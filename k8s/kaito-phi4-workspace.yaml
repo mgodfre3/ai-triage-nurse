@@ -1,0 +1,20 @@
+# =============================================================================
+# KAITO Workspace — Deploy phi-4-mini-instruct model on existing GPU node
+# Creates an OpenAI-compatible inference endpoint served by KAITO
+# =============================================================================
+apiVersion: kaito.sh/v1beta1
+kind: Workspace
+metadata:
+  name: phi-4-mini
+  namespace: ai-triage-nurse
+resource:
+  count: 0
+  instanceType: "Standard_NK6"
+  labelSelector:
+    matchLabels:
+      nvidia.com/gpu.present: "true"
+  preferredNodes:
+    - moc-lckra1on5o6
+inference:
+  preset:
+    name: phi-4-mini-instruct

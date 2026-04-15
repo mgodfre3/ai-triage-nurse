@@ -50,11 +50,11 @@ spec:
 
           env:
             - name: FOUNDRY_API_BASE
-              value: "http://localhost:5273/v1"
+              value: "http://ollama:11434/v1"
             - name: FOUNDRY_API_KEY
-              value: "foundry-local"
+              value: "ollama"
             - name: FOUNDRY_MODEL_CHAT
-              value: "phi-4-mini"
+              value: "qwen2.5:3b"
             - name: FOUNDRY_MODEL_AUDIO
               value: "whisper-tiny"
             - name: PYTHONUNBUFFERED
