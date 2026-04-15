@@ -339,14 +339,31 @@
 
             const model = gltf.scene;
 
+            // Paint model with vivid vertex colors based on height
+            // Model is normalized: feet at y=0, head at y=2
             model.traverse((child) => {
-              if (child.isMesh && child.material) {
-                const mats = Array.isArray(child.material) ? child.material : [child.material];
-                mats.forEach((mat) => {
-                  // Smooth shading and subtle shininess
-                  mat.roughness = 0.85;
-                  mat.metalness = 0.0;
-                  mat.needsUpdate = true;
+              if (child.isMesh && child.geometry) {
+                const geo = child.geometry;
+                const pos = geo.attributes.position;
+                if (!pos) return;
+                const colors = new Float32Array(pos.count * 3);
+                for (let i = 0; i < pos.count; i++) {
+                  const y = pos.getY(i);
+                  let r, g, b;
+                  if (y > 1.72)      { r = 0.23; g = 0.15; b = 0.09; } // dark brown hair
+                  else if (y > 1.58) { r = 0.91; g = 0.72; b = 0.62; } // skin tone
+                  else if (y > 0.45) { r = 0.18; g = 0.66; b = 0.63; } // teal scrubs
+                  else if (y > 0.15) { r = 0.22; g = 0.31; b = 0.41; } // navy pants
+                  else               { r = 0.93; g = 0.93; b = 0.93; } // white shoes
+                  colors[i * 3]     = r;
+                  colors[i * 3 + 1] = g;
+                  colors[i * 3 + 2] = b;
+                }
+                geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                child.material = new THREE.MeshStandardMaterial({
+                  vertexColors: true,
+                  roughness: 0.65,
+                  metalness: 0.0,
                 });
               }
             });
