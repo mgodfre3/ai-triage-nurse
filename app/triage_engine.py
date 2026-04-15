@@ -245,11 +245,6 @@ class TriageSession:
             if not message.tool_calls:
                 return
 
-        # Exhausted MAX_TOOL_ROUNDS — force stop and warn
-        yield WSMessage(type="error", data={
-            "message": "Triage session hit tool-call limit. Please try again."
-        })
-
             # Execute each requested tool and feed results back.
             for tool_call in message.tool_calls:
                 fn_name = tool_call.function.name
@@ -276,6 +271,11 @@ class TriageSession:
                     "tool_call_id": tool_call.id,
                     "content": result_text,
                 })
+
+        # Exhausted MAX_TOOL_ROUNDS — force stop and warn
+        yield WSMessage(type="error", data={
+            "message": "Triage session hit tool-call limit. Please try again."
+        })
 
     # ------------------------------------------------------------------
     # Tool implementations
