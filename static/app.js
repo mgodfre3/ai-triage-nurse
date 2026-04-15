@@ -377,7 +377,13 @@
 
               gltfActions.idle.play();
               activeAction = gltfActions.idle;
+            } else {
+              console.log('[3d] No embedded animations — using procedural sway');
             }
+
+            // Store model ref for procedural animation on static models
+            window._gltfModel = model;
+            window._gltfBaseY = model.position.y;
 
             console.log('[3d] GLTF nurse model loaded (' + height.toFixed(1) + ' units tall)');
           } catch (err) {
@@ -399,14 +405,45 @@
 
     /* --- Animation loop --- */
     const clock = new THREE.Clock();
+    let _nurseState = 'idle'; // track current nurse activity state
+
+    // Override _nurseAnimate to also track state for procedural motion
+    const origAnimate = window._nurseAnimate;
+    window._nurseAnimate = function (state) {
+      _nurseState = state;
+      if (origAnimate) origAnimate(state);
+    };
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
       const t = clock.getElapsedTime();
 
-      // Update GLTF animations
+      // Update GLTF animations (if clips exist)
       if (mixer) mixer.update(dt);
+
+      // Procedural sway for static GLTF model (no animation clips)
+      if (modelLoaded && !mixer && window._gltfModel) {
+        const m = window._gltfModel;
+        const baseY = window._gltfBaseY || 0;
+        // Gentle breathing (Y bob)
+        m.position.y = baseY + Math.sin(t * 1.5) * 0.15;
+        // Subtle body sway
+        m.rotation.y = Math.sin(t * 0.8) * 0.04;
+
+        if (_nurseState === 'speaking') {
+          // More lively — slight lean and faster sway
+          m.rotation.z = Math.sin(t * 3) * 0.02;
+          m.rotation.y = Math.sin(t * 1.5) * 0.08;
+        } else if (_nurseState === 'thinking') {
+          // Slight head tilt
+          m.rotation.z = 0.03;
+          m.rotation.x = Math.sin(t * 0.5) * 0.02;
+        } else {
+          m.rotation.z = 0;
+          m.rotation.x = 0;
+        }
+      }
 
       // Procedural animations (only if no GLTF model loaded)
       if (!modelLoaded && nurseGroup) {
