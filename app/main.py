@@ -55,8 +55,12 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Static files
+# Static files — register GLTF MIME types so 3D models load correctly
 # ---------------------------------------------------------------------------
+import mimetypes
+mimetypes.add_type("model/gltf-binary", ".glb")
+mimetypes.add_type("model/gltf+json", ".gltf")
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
